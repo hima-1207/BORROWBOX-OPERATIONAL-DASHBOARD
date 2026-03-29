@@ -1,0 +1,89 @@
+BorrowBox Dataset – Data Dictionary,
+,
+reservation_id, – Unique ID for each reservation record.
+,
+user_id ,– Unique ID for each user who made the reservation.
+,
+user_type ,"– Type of user (Resident, Volunteer, Nonprofit Partner)."
+,
+member_status ,"– Membership level of the user (Standard, Frequent Borrower, New User)."
+,
+age_group," – Age category of the user (18–24, 25–34, etc.)."
+,
+neighborhood ,– Area where the user belongs or lives.
+,
+hub_id ,– Unique ID for the pickup hub.
+,
+hub_name ,– Name of the pickup hub.
+,
+hub_type ,"– Type of hub (Staffed, Staffed + Volunteers, Volunteer-heavy)."
+,
+item_id ,– Unique ID for the borrowed item.
+,
+item_category ,"– Category of the item (Tools, Camping, Sports, etc.)."
+,
+item_name ,– Specific name of the item borrowed.
+,
+reservation_date ,– Date when the reservation was created.
+,
+pickup_scheduled_datetime ,– Date and time scheduled for pickup.
+,
+pickup_status ,"– Status of pickup (Picked up, No-show, Cancelled)."
+,
+pickup_actual_datetime ,– Actual date and time when item was picked up (if picked up).
+,
+borrow_days ,– Number of days the item was borrowed for.
+,
+return_due_datetime ,– Scheduled date and time for return.
+,
+return_status ,"– Return outcome (On time, Late, Not returned)."
+,
+return_actual_datetime ,– Actual return date and time.
+,
+late_hours, – Number of hours late (if returned late).
+,
+parts_expected ,– Number of parts expected to be returned with the item.
+,
+parts_returned ,– Number of parts actually returned.
+,
+missing_parts_flag ,"– Indicator (1 = missing parts, 0 = complete return)."
+,
+damage_flag ,"– Indicator (1 = damaged, 0 = not damaged)."
+,
+damage_severity ,"– Level of damage (Minor, Moderate, Severe)."
+,
+cleaning_required_flag ,"– Indicator (1 = cleaning required, 0 = not required)."
+,
+cleaning_done_flag ,"– Indicator (1 = cleaning completed, 0 = not completed)."
+,
+staff_checkout_minutes ,– Time (in minutes) staff spent during checkout process.
+,
+staff_checkin_minutes, – Time (in minutes) staff spent during return/check-in process.
+,
+hub_queue_length ,– Number of people waiting at the hub during that time.
+,
+demand_level," – Demand level during reservation (Low, Medium, High)."
+,
+event_period ,"– Type of period (Regular, Weekend, Holiday/Peak)."
+,
+inventory_available_at_reserve ,"– Indicator (1 = item available at reservation time, 0 = not available)."
+,
+notifications_enabled_flag ,"– Indicator (1 = notifications enabled, 0 = disabled)."
+,
+reminders_sent_count ,– Number of reminders sent to the user.
+,
+report_issue_in_app_flag ,"– Indicator (1 = issue reported in app, 0 = no report)."
+,
+support_ticket_flag ,"– Indicator (1 = support ticket created, 0 = none)."
+,
+ticket_type ,"– Type of support ticket (Missing parts, Damage, Late return dispute, App issue)."
+,
+data_entry_method ,"– Method used for logging (Electronic log, Handwritten notes, Mixed)."
+,
+staff_notes_length ,– Length of staff notes recorded (number of characters).
+,
+penalty_amount_usd, – Monetary penalty charged in USD.
+,
+cancellation_flag ,"– Indicator (1 = reservation cancelled, 0 = not cancelled)."
+,
+cancellation_reason ,– Reason for cancellation (if cancelled).
