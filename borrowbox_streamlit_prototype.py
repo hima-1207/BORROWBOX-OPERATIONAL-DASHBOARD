@@ -449,7 +449,68 @@ def style_plotly(fig, height=380, legend_position="bottom", top_margin=80, botto
 
     return fig
 
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if "user_role" not in st.session_state:
+    st.session_state.user_role = None
+
+if "user_name" not in st.session_state:
+    st.session_state.user_name = ""
+
+# ---------------- LOGIN SYSTEM ----------------
+def show_login():
+    st.markdown("""
+    <div class="hero-wrap">
+        <div class="hero-dash-left"></div>
+        <div class="hero-dash-left-2"></div>
+        <div class="hero-orange-box"></div>
+        <div class="hero-orange-angle"></div>
+        <div class="hero-teal-curve"></div>
+        <div class="hero-circle-purple"></div>
+        <div class="hero-circle-teal"></div>
+        <div class="hero-circle-blue"></div>
+        <div class="hero-title">BorrowBox Operational<br>Monitoring Dashboard</div>
+        <div class="hero-subtitle">Prototype login to simulate user and staff access.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<div class='section-title'>Login</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-note'>This screen simulates how different people would enter the system based on their role.</div>", unsafe_allow_html=True)
+
+    with st.form("login_form"):
+        c1, c2 = st.columns(2)
+        with c1:
+            name = st.text_input("Name")
+        with c2:
+            role = st.selectbox("Login as", ["User", "Staff"])
+
+        login_btn = st.form_submit_button("Sign In")
+
+        if login_btn:
+            if name.strip() == "":
+                st.warning("Please enter a name.")
+            else:
+                st.session_state.logged_in = True
+                st.session_state.user_role = role
+                st.session_state.user_name = name
+                st.success(f"Signed in as {role}.")
+                st.rerun()
+if not st.session_state.logged_in:
+    show_login()
+    st.stop()                
+
+# ---------------- SIDE BAR ----------------
 st.sidebar.markdown("## BorrowBox Prototype")
+st.sidebar.markdown(f"**Signed in as:** {st.session_state.user_name}")
+st.sidebar.markdown(f"**Role:** {st.session_state.user_role}")
+
+if st.sidebar.button("Logout"):
+    st.session_state.logged_in = False
+    st.session_state.user_role = None
+    st.session_state.user_name = ""
+    st.rerun()
+
 upload = st.sidebar.file_uploader("Upload BorrowBox CSV if needed", type=["csv"])
 df = load_data(upload)
 
@@ -461,7 +522,12 @@ selected_hubs = st.sidebar.multiselect("Filter by hub", all_hubs, default=[])
 selected_months = st.sidebar.multiselect("Filter by month", month_order, default=[])
 selected_members = st.sidebar.multiselect("Filter by member status", all_members, default=[])
 
-page = st.sidebar.radio("Go to page", ["Home","User Behavior","Inventory & Damage Risk","Hub Operations","Log Return Issue"])
+if st.session_state.user_role == "User":
+    available_pages = ["Home", "Book New Reservation"]
+else:
+    available_pages = ["Home", "User Behavior", "Inventory & Damage Risk", "Hub Operations", "Log Return Issue"]
+
+page = st.sidebar.radio("Go to page", available_pages)
 filtered = filter_data(df, selected_hubs, selected_months, selected_members)
 if filtered.empty:
     st.warning("No rows match the current filters. Please change the sidebar selections.")
@@ -474,6 +540,7 @@ avg_checkin = filtered["staff_checkin_minutes"].mean()
 damage_rate = filtered["damage_flag"].mean()
 risk_score = filtered["risk_score_row"].mean()
 
+# ---------------- PAGES ----------------
 if page == "Home":
     st.markdown("""
     <div class="hero-wrap">
@@ -544,6 +611,10 @@ if page == "Home":
     st.markdown("<div class='insight-box'><b>What this prototype shows:</b> BorrowBox can monitor the system through one landing page, then move into deeper views for user behavior, inventory risk, hub strain, and issue logging.</div>", unsafe_allow_html=True)
 
 elif page == "User Behavior":
+    if st.session_state.user_role != "Staff":
+    st.warning("Only staff can access this page.")
+    st.stop()
+    
     st.markdown("""
     <div class="hero-wrap">
         <div class="hero-dash-left"></div>
@@ -744,6 +815,10 @@ elif page == "User Behavior":
     st.markdown("<div class='insight-box'><b>Main insight:</b> This view shows the full behavior story. Staff can see how many users miss pickups, how late returns change across months, and whether reminders help reduce behavior problems.</div>", unsafe_allow_html=True)
 
 elif page == "Inventory & Damage Risk":
+    if st.session_state.user_role != "Staff":
+    st.warning("Only staff can access this page.")
+    st.stop()
+    
     st.markdown("""
     <div class="hero-wrap">
         <div class="hero-dash-left"></div>
@@ -894,6 +969,10 @@ elif page == "Inventory & Damage Risk":
     st.markdown("<div class='insight-box'><b>Main insight:</b> This page makes the risk story easy to follow. Higher missing parts and damage are linked to more staff effort, and the penalty logic stays small because BorrowBox was designed to remain accessible.</div>", unsafe_allow_html=True)
 
 elif page == "Hub Operations":
+    if st.session_state.user_role != "Staff":
+    st.warning("Only staff can access this page.")
+    st.stop()
+    
     st.markdown("""
     <div class="hero-wrap">
         <div class="hero-dash-left"></div>
@@ -1026,7 +1105,82 @@ elif page == "Hub Operations":
 
     st.markdown("<div class='insight-box'><b>Main insight:</b> This page helps the user see that the system can compare hubs, surface manual reporting gaps, and show where demand and inventory are not lining up.</div>", unsafe_allow_html=True)
 
+elif page == "Book New Reservation":
+    st.markdown("""
+    <div class="hero-wrap">
+        <div class="hero-dash-left"></div>
+        <div class="hero-dash-left-2"></div>
+        <div class="hero-orange-box"></div>
+        <div class="hero-orange-angle"></div>
+        <div class="hero-teal-curve"></div>
+        <div class="hero-circle-purple"></div>
+        <div class="hero-circle-teal"></div>
+        <div class="hero-circle-blue"></div>
+        <div class="hero-title">BorrowBox Operational<br>Monitoring Dashboard</div>
+        <div class="hero-subtitle">Prototype page for creating a new reservation.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<div class='section-title'>Book New Reservation</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-note'>This page simulates how a user would create a new reservation in the BorrowBox system.</div>", unsafe_allow_html=True)
+
+    if "user_reservations" not in st.session_state:
+        st.session_state.user_reservations = []
+
+    with st.form("reservation_form"):
+        c1, c2 = st.columns(2)
+
+        with c1:
+            full_name = st.text_input("Full Name", value=st.session_state.user_name)
+            hub_name = st.selectbox("Pickup Hub", all_hubs)
+            item_category = st.selectbox("Item Category", sorted(df["item_category"].dropna().unique().tolist()))
+            borrow_days = st.number_input("Borrow Duration (Days)", min_value=1, max_value=30, value=3)
+
+        with c2:
+            member_status = st.selectbox("Member Type", sorted(df["member_status"].dropna().unique().tolist()))
+            notifications = st.selectbox("Enable Notifications?", ["Yes", "No"])
+            pickup_date = st.date_input("Pickup Date")
+            notes = st.text_area("Reservation Notes", placeholder="Example: Need camping kit for weekend trip")
+
+        submit_reservation = st.form_submit_button("Book Reservation")
+
+        if submit_reservation:
+            reservation_data = {
+                "full_name": full_name,
+                "hub_name": hub_name,
+                "item_category": item_category,
+                "borrow_days": borrow_days,
+                "member_status": member_status,
+                "notifications": notifications,
+                "pickup_date": str(pickup_date),
+                "notes": notes
+            }
+            st.session_state.user_reservations.append(reservation_data)
+            st.success("Reservation submitted in the prototype. This simulates a user creating a new booking.")
+
+    if st.session_state.user_reservations:
+        st.markdown("### Recent reservation requests")
+        reservation_df = pd.DataFrame(st.session_state.user_reservations)
+        st.dataframe(reservation_df, use_container_width=True)
+
+        csv = reservation_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download reservation requests as CSV",
+            data=csv,
+            file_name="borrowbox_user_reservations.csv",
+            mime="text/csv"
+        )
+
+    st.markdown(
+        "<div class='insight-box'><b>Why this matters:</b> This page shows that the prototype supports a real user action. It is not only a reporting tool. It also simulates how a user would place a reservation, which then becomes part of the operational workflow.</div>",
+        unsafe_allow_html=True
+    )
+
 elif page == "Log Return Issue":
+    if st.session_state.user_role != "Staff":
+    st.warning("Only staff can access this page.")
+    st.stop()
+    
     st.markdown("""
     <div class="hero-wrap">
         <div class="hero-dash-left"></div>
