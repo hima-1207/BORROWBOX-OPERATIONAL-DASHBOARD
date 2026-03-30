@@ -612,8 +612,8 @@ if page == "Home":
 
 elif page == "User Behavior":
     if st.session_state.user_role != "Staff":
-    st.warning("Only staff can access this page.")
-    st.stop()
+        st.warning("Only staff can access this page.")
+        st.stop()
     
     st.markdown("""
     <div class="hero-wrap">
@@ -816,8 +816,8 @@ elif page == "User Behavior":
 
 elif page == "Inventory & Damage Risk":
     if st.session_state.user_role != "Staff":
-    st.warning("Only staff can access this page.")
-    st.stop()
+        st.warning("Only staff can access this page.")
+        st.stop()
     
     st.markdown("""
     <div class="hero-wrap">
@@ -970,8 +970,8 @@ elif page == "Inventory & Damage Risk":
 
 elif page == "Hub Operations":
     if st.session_state.user_role != "Staff":
-    st.warning("Only staff can access this page.")
-    st.stop()
+        st.warning("Only staff can access this page.")
+        st.stop()
     
     st.markdown("""
     <div class="hero-wrap">
@@ -1178,8 +1178,8 @@ elif page == "Book New Reservation":
 
 elif page == "Log Return Issue":
     if st.session_state.user_role != "Staff":
-    st.warning("Only staff can access this page.")
-    st.stop()
+        st.warning("Only staff can access this page.")
+        st.stop()
     
     st.markdown("""
     <div class="hero-wrap">
