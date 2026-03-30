@@ -319,6 +319,15 @@ div[data-testid="stPlotlyChart"] {
 .modebar:hover {
     opacity: 0.9 !important;
 }
+.stTabs [data-baseweb="tab-list"] {
+    gap: 12px;
+}
+
+.stTabs [data-baseweb="tab"] {
+    border-radius: 999px;
+    padding: 8px 18px;
+    background: rgba(255,255,255,0.75);
+}
 </style>
 '''
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -384,7 +393,7 @@ def make_kpi_card(label, value, help_text=None):
     </div>
     """, unsafe_allow_html=True)
 
-def style_plotly(fig, height=380, legend_position="bottom", top_margin=80, bottom_margin=70):
+def style_plotly(fig, height=380, legend_position="bottom", top_margin=80, bottom_margin=90):
     legend_cfg = dict(
         orientation="h",
         bgcolor="rgba(255,255,255,0)",
@@ -395,7 +404,7 @@ def style_plotly(fig, height=380, legend_position="bottom", top_margin=80, botto
     if legend_position == "bottom":
         legend_cfg.update(
             yanchor="top",
-            y=-0.18,
+            y=-0.28,
             xanchor="center",
             x=0.5
         )
@@ -449,6 +458,23 @@ def style_plotly(fig, height=380, legend_position="bottom", top_margin=80, botto
 
     return fig
 
+import random
+import string
+from datetime import datetime
+
+def generate_reservation_id(existing_ids):
+    while True:
+        new_id = "R" + "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        if new_id not in existing_ids:
+            return new_id
+
+def generate_issue_id(existing_ids):
+    while True:
+        new_id = "ISSUE-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
+        if new_id not in existing_ids:
+            return new_id
+
+# ---------------- LOGIN SYSTEM ----------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
@@ -458,7 +484,16 @@ if "user_role" not in st.session_state:
 if "user_name" not in st.session_state:
     st.session_state.user_name = ""
 
-# ---------------- LOGIN SYSTEM ----------------
+if "users_db" not in st.session_state:
+    st.session_state.users_db = {
+        "staff@borrowbox.com": {
+            "name": "BorrowBox Staff",
+            "password": "staff123",
+            "role": "Staff",
+            "phone": "555-0100"
+        }
+    }
+
 def show_login():
     st.markdown("""
     <div class="hero-wrap">
@@ -475,27 +510,66 @@ def show_login():
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<div class='section-title'>Login</div>", unsafe_allow_html=True)
-    st.markdown("<div class='section-note'>This screen simulates how different people would enter the system based on their role.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>Access the Prototype</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-note'>This screen simulates how users and staff would sign in or create an account before using the system.</div>", unsafe_allow_html=True)
 
-    with st.form("login_form"):
-        c1, c2 = st.columns(2)
-        with c1:
-            name = st.text_input("Name")
-        with c2:
-            role = st.selectbox("Login as", ["User", "Staff"])
+    tab1, tab2 = st.tabs(["Sign In", "Sign Up"])
 
-        login_btn = st.form_submit_button("Sign In")
+    with tab1:
+        with st.form("signin_form"):
+            c1, c2 = st.columns(2)
+            with c1:
+                email = st.text_input("Email")
+                password = st.text_input("Password", type="password")
+            with c2:
+                role = st.selectbox("Login as", ["User", "Staff"])
 
-        if login_btn:
-            if name.strip() == "":
-                st.warning("Please enter a name.")
-            else:
-                st.session_state.logged_in = True
-                st.session_state.user_role = role
-                st.session_state.user_name = name
-                st.success(f"Signed in as {role}.")
-                st.rerun()
+            signin_btn = st.form_submit_button("Sign In")
+
+            if signin_btn:
+                if email in st.session_state.users_db:
+                    user = st.session_state.users_db[email]
+                    if user["password"] == password and user["role"] == role:
+                        st.session_state.logged_in = True
+                        st.session_state.user_role = user["role"]
+                        st.session_state.user_name = user["name"]
+                        st.success(f"Signed in as {user['role']}.")
+                        st.rerun()
+                    else:
+                        st.error("Wrong password or role.")
+                else:
+                    st.error("Account not found. Please sign up first.")
+
+    with tab2:
+        with st.form("signup_form"):
+            c1, c2 = st.columns(2)
+            with c1:
+                new_name = st.text_input("Full Name")
+                new_email = st.text_input("Email Address")
+                new_phone = st.text_input("Phone Number")
+            with c2:
+                new_role = st.selectbox("Register as", ["User", "Staff"])
+                new_password = st.text_input("Create Password", type="password")
+                confirm_password = st.text_input("Confirm Password", type="password")
+
+            signup_btn = st.form_submit_button("Create Account")
+
+            if signup_btn:
+                if not new_name.strip() or not new_email.strip() or not new_password.strip():
+                    st.warning("Please fill in all required fields.")
+                elif new_password != confirm_password:
+                    st.error("Passwords do not match.")
+                elif new_email in st.session_state.users_db:
+                    st.error("An account with this email already exists.")
+                else:
+                    st.session_state.users_db[new_email] = {
+                        "name": new_name,
+                        "password": new_password,
+                        "role": new_role,
+                        "phone": new_phone
+                    }
+                    st.success("Account created successfully. Please sign in.")
+
 if not st.session_state.logged_in:
     show_login()
     st.stop()                
@@ -644,105 +718,108 @@ elif page == "User Behavior":
     # -------------------------------
     # Full-width No-show & Cancellation
     # -------------------------------
-    ns = (
-        filtered[filtered["pickup_status"].isin(["No-show", "Cancelled"])]
+    all_statuses = ["No-show", "Cancelled"]
+
+    # all hubs and months, even if count = 0
+    full_grid = pd.MultiIndex.from_product(
+        [all_hubs, month_order, all_statuses],
+        names=["hub_name", "month_name", "pickup_status"]
+    ).to_frame(index=False)
+
+    month_sort_map = df[["month_name", "month_sort"]].drop_duplicates()
+    full_grid = full_grid.merge(month_sort_map, on="month_name", how="left")
+
+    ns_actual = (
+        filtered[filtered["pickup_status"].isin(all_statuses)]
         .groupby(["hub_name", "month_name", "month_sort", "pickup_status"], as_index=False)
         .agg(count=("reservation_id", "count"))
-        .sort_values(["month_sort", "hub_name"])
     )
 
-    if not ns.empty:
-        month_order = (
-            ns[["month_name", "month_sort"]]
-            .drop_duplicates()
-            .sort_values("month_sort")["month_name"]
-            .tolist()
+    ns = full_grid.merge(
+        ns_actual,
+        on=["hub_name", "month_name", "month_sort", "pickup_status"],
+        how="left"
+    )
+    ns["count"] = ns["count"].fillna(0)
+
+    hub_order = all_hubs[:]   # force all hubs to appear
+    dynamic_height = max(760, 120 + len(hub_order) * 48)
+
+    fig2 = px.bar(
+        ns,
+        x="count",
+        y="hub_name",
+        color="pickup_status",
+        facet_col="month_name",
+        facet_col_spacing=0.012,
+        orientation="h",
+        title="No-Show & Cancellation",
+        text=ns["count"].apply(lambda x: "" if x == 0 else str(int(x))),
+        category_orders={
+            "month_name": month_order,
+            "hub_name": hub_order
+        },
+        color_discrete_map={
+            "No-show": "#9ad0d6",
+            "Cancelled": "#ee6a6a"
+        }
+    )
+
+    fig2.update_layout(
+        barmode="group",
+        bargap=0.18,
+        bargroupgap=0.08
+    )
+
+    fig2.update_traces(
+        textposition="inside",
+        insidetextanchor="middle",
+        textfont=dict(size=10, color="#1f2d3d"),
+        cliponaxis=False
+    )
+
+    fig2.for_each_annotation(
+        lambda a: a.update(
+            text=a.text.split("=")[-1],
+            font=dict(size=13, color="#55657a")
         )
+    )
 
-        hub_order = (
-            ns.groupby("hub_name")["count"]
-            .sum()
-            .sort_values(ascending=False)
-            .index.tolist()
-        )
+    fig2.update_xaxes(
+        title=" ",
+        showticklabels=False,
+        range=[0, max(ns["count"].max() + 1, 6)],
+        automargin=True
+    )
+    fig2.update_yaxes(
+        title=" ",
+        categoryorder="array",
+        categoryarray=hub_order,
+        tickfont=dict(size=11),
+        automargin=True
+    )
 
-        dynamic_height = max(650, 90 + len(hub_order) * 44)
+    fig2 = style_plotly(
+        fig2,
+        height=dynamic_height,
+        legend_position="top",
+        top_margin=85,
+        bottom_margin=20
+    )
 
-        fig2 = px.bar(
-            ns,
-            x="count",
-            y="hub_name",
-            color="pickup_status",
-            facet_col="month_name",
-            facet_col_spacing=0.015,
+    fig2.update_layout(
+        margin=dict(l=135, r=20, t=85, b=15),
+        legend=dict(
             orientation="h",
-            title="No-Show & Cancellation",
-            text="count",
-            category_orders={
-                "month_name": month_order,
-                "hub_name": hub_order
-            },
-            color_discrete_map={
-                "No-show": "#9ad0d6",
-                "Cancelled": "#ee6a6a"
-            }
+            yanchor="bottom",
+            y=1.04,
+            xanchor="right",
+            x=1,
+            font=dict(size=10)
         )
+    )
 
-        fig2.update_layout(
-            barmode="group",
-            bargap=0.18,
-            bargroupgap=0.08
-        )
-
-        fig2.update_traces(
-            textposition="inside",
-            insidetextanchor="middle",
-            textfont=dict(size=11, color="#1f2d3d"),
-            cliponaxis=False
-        )
-
-        fig2.for_each_annotation(
-            lambda a: a.update(
-                text=a.text.split("=")[-1],
-                font=dict(size=13, color="#55657a")
-            )
-        )
-
-        fig2.update_xaxes(
-            title=" ",
-            showticklabels=False,
-            range=[0, max(ns["count"].max() + 1, 6)],
-            automargin=True
-        )
-        fig2.update_yaxes(
-            title=" ",
-            categoryorder="array",
-            categoryarray=hub_order,
-            tickfont=dict(size=11),
-            automargin=True
-        )
-
-        fig2 = style_plotly(
-            fig2,
-            height=dynamic_height,
-            legend_position="top",
-            top_margin=80,
-            bottom_margin=20
-        )
-
-        fig2.update_layout(
-            margin=dict(l=125, r=20, t=80, b=15),
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.05,
-                xanchor="right",
-                x=1,
-                font=dict(size=10)
-            )
-        )
-
-        st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
 
     # -------------------------------
     # Row 2: Late Return + Behavior Impact
@@ -1145,18 +1222,33 @@ elif page == "Book New Reservation":
         submit_reservation = st.form_submit_button("Book Reservation")
 
         if submit_reservation:
+            existing_res_ids = set(df["reservation_id"].dropna().astype(str).tolist())
+            if "user_reservations" in st.session_state and st.session_state.user_reservations:
+                existing_res_ids.update([str(x["reservation_id"]) for x in st.session_state.user_reservations])
+
+            new_reservation_id = generate_reservation_id(existing_res_ids)
+
             reservation_data = {
+                "reservation_id": new_reservation_id,
                 "full_name": full_name,
                 "hub_name": hub_name,
                 "item_category": item_category,
                 "borrow_days": borrow_days,
                 "member_status": member_status,
-                "notifications": notifications,
+                "notifications_enabled_flag": 1 if notifications == "Yes" else 0,
                 "pickup_date": str(pickup_date),
-                "notes": notes
+                "pickup_status": "Scheduled",
+                "return_status": "Not Returned Yet",
+                "missing_parts_flag": 0,
+                "damage_flag": 0,
+                "notes": notes,
+                "created_by": st.session_state.user_name,
+                "created_role": st.session_state.user_role,
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
+
             st.session_state.user_reservations.append(reservation_data)
-            st.success("Reservation submitted in the prototype. This simulates a user creating a new booking.")
+            st.success(f"Reservation submitted successfully. New Reservation ID: {new_reservation_id}")
 
     if st.session_state.user_reservations:
         st.markdown("### Recent reservation requests")
@@ -1212,9 +1304,29 @@ elif page == "Log Return Issue":
             support_ticket = st.selectbox("Create Support Ticket?", ["No","Yes"])
             notes = st.text_area("Staff Notes", placeholder="Example: Power cord missing from item set")
             submitted = st.form_submit_button("Submit Issue")
-        if submitted:
-            st.session_state.logged_issues.append({"reservation_id":reservation_id, "hub_name":hub_name, "item_category":item_category, "missing_parts":missing_parts, "damage_severity":damage_severity, "support_ticket":support_ticket, "notes":notes})
-            st.success("Issue saved in the prototype. This simulates data entry from staff to the monitoring system.")
+            if submitted:
+                existing_issue_ids = set()
+                if st.session_state.logged_issues:
+                    existing_issue_ids.update([str(x["issue_id"]) for x in st.session_state.logged_issues])
+    
+                new_issue_id = generate_issue_id(existing_issue_ids)
+    
+                issue_record = {
+                    "issue_id": new_issue_id,
+                    "reservation_id": reservation_id,
+                    "hub_name": hub_name,
+                    "item_category": item_category,
+                    "missing_parts": missing_parts,
+                    "damage_severity": damage_severity,
+                    "support_ticket": support_ticket,
+                    "notes": notes,
+                    "logged_by": st.session_state.user_name,
+                    "logged_role": st.session_state.user_role,
+                    "logged_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+    
+                st.session_state.logged_issues.append(issue_record)
+                st.success(f"Issue saved successfully. New Issue ID: {new_issue_id}")
     if st.session_state.logged_issues:
         st.markdown("### Recent issue entries")
         issue_df = pd.DataFrame(st.session_state.logged_issues)
