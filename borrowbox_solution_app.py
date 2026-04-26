@@ -785,7 +785,10 @@ elif page == "Decision Guide":
 
 elif page == "Inventory Lookup":
 
-    hero("Inventory Explorer", "Search items like a library and see real-time availability, condition, and readiness.")
+    hero(
+        "Inventory Explorer",
+        "Search items like a library and see availability, condition, and the best hub to book from."
+    )
 
     page_header(
         "Inventory Lookup",
@@ -794,23 +797,32 @@ elif page == "Inventory Lookup":
     )
 
     # ---------------------------
-    # Selection
+    # Search and filters
     # ---------------------------
-    col1, col2 = st.columns(2)
+    c1, c2, c3 = st.columns([1.3, 1, 1], gap="small")
 
-    with col1:
+    with c1:
+        search_text = st.text_input(
+            "Search by Item Name",
+            placeholder="Example: Projector, Speaker, Tent, Drill"
+        )
+
+    with c2:
         selected_category = st.selectbox(
             "Select Item Category",
             ["All"] + sorted(df["item_category"].dropna().unique().tolist())
         )
 
-    with col2:
+    with c3:
         selected_hub = st.selectbox(
-            "Select Hub (Optional)",
+            "Select Hub",
             ["All"] + sorted(df["hub_name"].dropna().unique().tolist())
         )
 
     data = df.copy()
+
+    if search_text.strip():
+        data = data[data["item_name"].str.contains(search_text.strip(), case=False, na=False)]
 
     if selected_category != "All":
         data = data[data["item_category"] == selected_category]
@@ -818,90 +830,212 @@ elif page == "Inventory Lookup":
     if selected_hub != "All":
         data = data[data["hub_name"] == selected_hub]
 
-    # ---------------------------
-    # Derived Status Columns
-    # ---------------------------
-    data["is_missing"] = data["missing_parts_flag"] == 1
-    data["needs_cleaning"] = (data["cleaning_required_flag"] == 1) & (data["cleaning_done_flag"] == 0)
-    data["is_booked"] = data["pickup_status"].isin(["Picked up", "Scheduled"])
-    data["is_available"] = (~data["is_booked"]) & (~data["is_missing"]) & (~data["needs_cleaning"])
+    if data.empty:
+        st.warning("No matching inventory found. Try another item name, category, or hub.")
+        st.stop()
 
     # ---------------------------
-    # GROUPED SUMMARY
+    # Inventory logic
     # ---------------------------
-    summary = data.groupby(["hub_name", "item_category"]).agg(
+    data["is_missing"] = data["missing_parts_flag"].fillna(0).astype(int) == 1
+    data["is_damaged"] = data["damage_flag"].fillna(0).astype(int) == 1
+    data["needs_cleaning"] = (
+        (data["cleaning_required_flag"].fillna(0).astype(int) == 1)
+        & (data["cleaning_done_flag"].fillna(0).astype(int) == 0)
+    )
+
+    data["is_booked"] = data["pickup_status"].isin(["Picked up", "Scheduled"])
+
+    data["ready_to_book"] = (
+        (~data["is_booked"])
+        & (~data["is_missing"])
+        & (~data["is_damaged"])
+        & (~data["needs_cleaning"])
+        & (data["inventory_available_at_reserve"].fillna(0).astype(int) == 1)
+    )
+
+    # ---------------------------
+    # Top inventory cards
+    # ---------------------------
+    total_items = len(data)
+    ready_items = int(data["ready_to_book"].sum())
+    booked_items = int(data["is_booked"].sum())
+    missing_items = int(data["is_missing"].sum())
+    damaged_items = int(data["is_damaged"].sum())
+    cleaning_items = int(data["needs_cleaning"].sum())
+
+    ready_rate = ready_items / total_items if total_items > 0 else 0
+
+    k1, k2, k3, k4, k5 = st.columns(5, gap="small")
+
+    with k1:
+        make_kpi_card("Total Matching Items", str(total_items), "Items matching your search")
+    with k2:
+        make_kpi_card("Ready to Book", str(ready_items), "Available and usable now")
+    with k3:
+        make_kpi_card("Already Booked", str(booked_items), "Currently picked up or scheduled")
+    with k4:
+        make_kpi_card("Missing/Damaged", str(missing_items + damaged_items), "Needs staff attention")
+    with k5:
+        make_kpi_card("Needs Cleaning", str(cleaning_items), "Not ready until cleaned")
+
+    # ---------------------------
+    # Best hub recommendation
+    # ---------------------------
+    hub_summary = data.groupby("hub_name", as_index=False).agg(
         total_items=("reservation_id", "count"),
-        available_items=("is_available", "sum"),
+        ready_to_book=("ready_to_book", "sum"),
         booked_items=("is_booked", "sum"),
         missing_items=("is_missing", "sum"),
-        cleaning_needed=("needs_cleaning", "sum")
-    ).reset_index()
+        damaged_items=("is_damaged", "sum"),
+        cleaning_needed=("needs_cleaning", "sum"),
+        avg_queue=("hub_queue_length", "mean")
+    )
 
+    hub_summary["ready_rate"] = hub_summary["ready_to_book"] / hub_summary["total_items"]
+
+    hub_summary["issue_count"] = (
+        hub_summary["missing_items"]
+        + hub_summary["damaged_items"]
+        + hub_summary["cleaning_needed"]
+    )
+
+    hub_summary["hub_score"] = (
+        hub_summary["ready_to_book"] * 3
+        + hub_summary["ready_rate"] * 10
+        - hub_summary["avg_queue"].fillna(0) * 0.5
+        - hub_summary["issue_count"] * 0.7
+    )
+
+    hub_summary = hub_summary.sort_values("hub_score", ascending=False)
+
+    best_hub = hub_summary.iloc[0]
+
+    # ---------------------------
+    # Availability prediction
+    # ---------------------------
+    if ready_rate >= 0.60:
+        prediction = "High availability"
+        prediction_message = "There are enough ready items, so booking should be easy."
+        border_color = "#7bc96f"
+    elif ready_rate >= 0.30:
+        prediction = "Medium availability"
+        prediction_message = "Some items are ready, but users should book soon or use the recommended hub."
+        border_color = "#f2bd60"
+    else:
+        prediction = "Low availability"
+        prediction_message = "Very few items are ready. Staff may need to clean, repair, or restock items."
+        border_color = "#e15659"
+
+    st.markdown(
+        f"""
+        <div style="
+            background: rgba(255,255,255,0.86);
+            border: 1.4px solid #d8dbe0;
+            border-left: 8px solid {border_color};
+            border-radius: 20px;
+            padding: 16px 18px;
+            margin-top: 12px;
+            margin-bottom: 14px;
+            color: #26374d;">
+            <b>Availability prediction:</b> {prediction}. {prediction_message}<br>
+            <b>Best hub recommendation:</b> {best_hub["hub_name"]} 
+            has <b>{int(best_hub["ready_to_book"])}</b> ready item(s), 
+            a ready rate of <b>{best_hub["ready_rate"]:.1%}</b>, 
+            and average queue length of <b>{best_hub["avg_queue"]:.2f}</b>.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # ---------------------------
+    # Inventory overview table
+    # ---------------------------
     st.markdown("### Inventory Overview")
+
+    summary = data.groupby(["hub_name", "item_category"], as_index=False).agg(
+        total_items=("reservation_id", "count"),
+        ready_to_book=("ready_to_book", "sum"),
+        booked_items=("is_booked", "sum"),
+        missing_items=("is_missing", "sum"),
+        damaged_items=("is_damaged", "sum"),
+        cleaning_needed=("needs_cleaning", "sum")
+    )
 
     st.dataframe(summary, use_container_width=True)
 
     # ---------------------------
-    # CATEGORY VIEW (like user search)
+    # Simple chart
     # ---------------------------
-    st.markdown("### Category Summary")
+    st.markdown("### Inventory Status by Hub")
 
-    category_summary = data.groupby("item_category").agg(
-        total=("reservation_id", "count"),
-        available=("is_available", "sum"),
-        booked=("is_booked", "sum"),
-        missing=("is_missing", "sum"),
-        cleaning=("needs_cleaning", "sum")
-    ).reset_index()
+    chart_data = hub_summary.copy()
 
     fig = px.bar(
-        category_summary,
-        x="item_category",
-        y=["available", "booked", "missing", "cleaning"],
+        chart_data,
+        x="hub_name",
+        y=["ready_to_book", "booked_items", "missing_items", "damaged_items", "cleaning_needed"],
         barmode="stack",
-        title="Item Status by Category",
+        title="Ready, Booked, Missing, Damaged, and Cleaning Items by Hub",
+        labels={
+            "hub_name": "Hub",
+            "value": "Item Count",
+            "variable": "Inventory Status"
+        },
         color_discrete_map={
-            "available": "#7bc96f",
-            "booked": "#5b8fe3",
-            "missing": "#e15659",
-            "cleaning": "#f2bd60"
+            "ready_to_book": "#7bc96f",
+            "booked_items": "#5b8fe3",
+            "missing_items": "#e15659",
+            "damaged_items": "#a77f68",
+            "cleaning_needed": "#f2bd60"
         }
     )
 
-    fig = style_plotly(fig, height=400)
-    st.plotly_chart(fig, use_container_width=True)
+    fig = style_plotly(fig, height=430, legend_position="bottom", top_margin=60, bottom_margin=95)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     # ---------------------------
-    # HUB VIEW
+    # Detail table
     # ---------------------------
-    st.markdown("### Hub Inventory Breakdown")
+    st.markdown("### Item Detail Table")
 
-    hub_summary = data.groupby("hub_name").agg(
-        total=("reservation_id", "count"),
-        available=("is_available", "sum"),
-        missing=("is_missing", "sum"),
-        cleaning=("needs_cleaning", "sum")
-    ).reset_index()
+    detail_cols = [
+        "item_name",
+        "item_category",
+        "hub_name",
+        "pickup_status",
+        "return_status",
+        "missing_parts_flag",
+        "damage_flag",
+        "cleaning_required_flag",
+        "cleaning_done_flag",
+        "inventory_available_at_reserve",
+        "hub_queue_length"
+    ]
 
-    fig2 = px.bar(
-        hub_summary,
-        x="hub_name",
-        y="available",
-        title="Available Items by Hub",
-        color_discrete_sequence=["#35c1b6"]
+    detail_cols = [col for col in detail_cols if col in data.columns]
+
+    detail_table = data[detail_cols].copy()
+    detail_table["ready_to_book"] = data["ready_to_book"].map({True: "Yes", False: "No"})
+    detail_table["already_booked"] = data["is_booked"].map({True: "Yes", False: "No"})
+    detail_table["needs_cleaning_now"] = data["needs_cleaning"].map({True: "Yes", False: "No"})
+
+    st.dataframe(detail_table, use_container_width=True)
+
+    st.download_button(
+        "Download inventory lookup results",
+        data=detail_table.to_csv(index=False).encode("utf-8"),
+        file_name="borrowbox_inventory_lookup.csv",
+        mime="text/csv"
     )
 
-    fig2 = style_plotly(fig2, height=400)
-    st.plotly_chart(fig2, use_container_width=True)
-
-    # ---------------------------
-    # INSIGHT BOX
-    # ---------------------------
-    st.markdown("""
-    <div class='insight-box'>
-    <b>What this means:</b>  
-    This page helps both users and staff quickly understand inventory readiness.  
-    Users can check if items are actually available before booking.  
-    Staff can identify problem areas like missing parts or items needing cleaning and take action.
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class='insight-box'>
+        <b>Why this matters:</b> This page works like a library search system.
+        Users can search for items before booking, and staff can quickly see which hubs have
+        ready items, booked items, missing parts, damages, or cleaning needs.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
