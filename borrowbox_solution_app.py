@@ -434,9 +434,9 @@ all_members = sorted(df["member_status"].dropna().unique().tolist())
 view_mode = st.sidebar.radio("Choose user type", ["Staff view", "User view"], help="This replaces login. It simply shows which pages belong to staff and which belong to regular users.")
 
 if view_mode == "Staff view":
-    pages = ["Home", "Staff Dashboard", "Log Return Issue", "Decision Guide"]
+    pages = ["Home", "Staff Dashboard", "Inventory Lookup", "Log Return Issue", "Decision Guide"]
 else:
-    pages = ["Home", "Book New Reservation", "My Reservation Summary", "Decision Guide"]
+    pages = ["Home", "Inventory Lookup", "Book New Reservation", "My Reservation Summary", "Decision Guide"]
 
 page = st.sidebar.radio("Go to page", pages)
 
@@ -782,3 +782,126 @@ elif page == "Decision Guide":
     """, unsafe_allow_html=True)
 
     st.markdown("<div class='insight-box'><b>Final decision story:</b> The proposed app supports both action and analysis. Users can create reservations, staff can log problems, and managers can monitor what needs attention. This connects the solution directly to the dashboard problems.</div>", unsafe_allow_html=True)
+
+elif page == "Inventory Lookup":
+
+    hero("Inventory Explorer", "Search items like a library and see real-time availability, condition, and readiness.")
+
+    page_header(
+        "Inventory Lookup",
+        "This page helps users and staff understand what items are available, where they are, and what condition they are in.",
+        "User + Staff"
+    )
+
+    # ---------------------------
+    # Selection
+    # ---------------------------
+    col1, col2 = st.columns(2)
+
+    with col1:
+        selected_category = st.selectbox(
+            "Select Item Category",
+            ["All"] + sorted(df["item_category"].dropna().unique().tolist())
+        )
+
+    with col2:
+        selected_hub = st.selectbox(
+            "Select Hub (Optional)",
+            ["All"] + sorted(df["hub_name"].dropna().unique().tolist())
+        )
+
+    data = df.copy()
+
+    if selected_category != "All":
+        data = data[data["item_category"] == selected_category]
+
+    if selected_hub != "All":
+        data = data[data["hub_name"] == selected_hub]
+
+    # ---------------------------
+    # Derived Status Columns
+    # ---------------------------
+    data["is_missing"] = data["missing_parts_flag"] == 1
+    data["needs_cleaning"] = (data["cleaning_required_flag"] == 1) & (data["cleaning_done_flag"] == 0)
+    data["is_booked"] = data["pickup_status"].isin(["Picked up", "Scheduled"])
+    data["is_available"] = (~data["is_booked"]) & (~data["is_missing"]) & (~data["needs_cleaning"])
+
+    # ---------------------------
+    # GROUPED SUMMARY
+    # ---------------------------
+    summary = data.groupby(["hub_name", "item_category"]).agg(
+        total_items=("reservation_id", "count"),
+        available_items=("is_available", "sum"),
+        booked_items=("is_booked", "sum"),
+        missing_items=("is_missing", "sum"),
+        cleaning_needed=("needs_cleaning", "sum")
+    ).reset_index()
+
+    st.markdown("### Inventory Overview")
+
+    st.dataframe(summary, use_container_width=True)
+
+    # ---------------------------
+    # CATEGORY VIEW (like user search)
+    # ---------------------------
+    st.markdown("### Category Summary")
+
+    category_summary = data.groupby("item_category").agg(
+        total=("reservation_id", "count"),
+        available=("is_available", "sum"),
+        booked=("is_booked", "sum"),
+        missing=("is_missing", "sum"),
+        cleaning=("needs_cleaning", "sum")
+    ).reset_index()
+
+    fig = px.bar(
+        category_summary,
+        x="item_category",
+        y=["available", "booked", "missing", "cleaning"],
+        barmode="stack",
+        title="Item Status by Category",
+        color_discrete_map={
+            "available": "#7bc96f",
+            "booked": "#5b8fe3",
+            "missing": "#e15659",
+            "cleaning": "#f2bd60"
+        }
+    )
+
+    fig = style_plotly(fig, height=400)
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ---------------------------
+    # HUB VIEW
+    # ---------------------------
+    st.markdown("### Hub Inventory Breakdown")
+
+    hub_summary = data.groupby("hub_name").agg(
+        total=("reservation_id", "count"),
+        available=("is_available", "sum"),
+        missing=("is_missing", "sum"),
+        cleaning=("needs_cleaning", "sum")
+    ).reset_index()
+
+    fig2 = px.bar(
+        hub_summary,
+        x="hub_name",
+        y="available",
+        title="Available Items by Hub",
+        color_discrete_sequence=["#35c1b6"]
+    )
+
+    fig2 = style_plotly(fig2, height=400)
+    st.plotly_chart(fig2, use_container_width=True)
+
+    # ---------------------------
+    # INSIGHT BOX
+    # ---------------------------
+    st.markdown("""
+    <div class='insight-box'>
+    <b>What this means:</b>  
+    This page helps both users and staff quickly understand inventory readiness.  
+    Users can check if items are actually available before booking.  
+    Staff can identify problem areas like missing parts or items needing cleaning and take action.
+    </div>
+    """, unsafe_allow_html=True)
